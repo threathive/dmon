@@ -51,10 +51,7 @@ async def index(request):
 
 @celery.task(name ="periodic_task")
 def periodic_task():
-    task = resolve_domains.delay()
-    print(task)
-    
-    logger.info("Hello! from periodic task")
+    resolve_domains.delay()
 
 @app.route('/ip/<ip>', methods=['GET']) #by default we look for ipv4
 @app.route('/ipv4/<ip>', methods=['GET'])
@@ -71,9 +68,7 @@ async def fetch_ipv4(request, ip):
 async def fetch_ipv6(request, ip):
     task = get_ipv6.delay(ip)
     while not task.ready():
-        print("waitin")
-    print("free!")
-    print(task.get(timeout=1))
+        pass
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/ns/<ns_domain>', methods=['GET'])
@@ -81,9 +76,7 @@ async def fetch_ipv6(request, ip):
 async def fetch_ns(request, ns_domain):
     task = get_ns.delay(ns_domain)
     while not task.ready():
-        print("waitin")
-    print("free!")
-    print(task.get(timeout=1))
+        pass
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/domain/<domain>', methods=['GET'])
@@ -91,9 +84,7 @@ async def fetch_ns(request, ns_domain):
 async def fetch_domain(request, domain):
     task = get_domain.delay(domain)
     while not task.ready():
-        print("waitin")
-    print("free!")
-    print(task.get(timeout=1))
+        pass
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/domain/<domain>', methods=['DELETE'])
@@ -101,9 +92,7 @@ async def fetch_domain(request, domain):
 async def drop_domain(request, domain):
     task = delete_domain.delay(domain)
     while not task.ready():
-        print("waitin")
-    print("free!")
-    print(task.get(timeout=1))
+        pass
     return response.json({"data" : task.get(timeout=1)})
 
 
@@ -112,9 +101,7 @@ async def drop_domain(request, domain):
 async def turn_on_domain(request, domain):
     task = enable_domain.delay(domain)
     while not task.ready():
-        print("waitin")
-    print("free!")
-    print(task.get(timeout=1))
+        pass
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/disable/<domain>', methods=['GET', 'POST'])
@@ -122,33 +109,31 @@ async def turn_on_domain(request, domain):
 async def turn_off_domain(request, domain):
     task = disable_domain.delay(domain)
     while not task.ready():
-        print("waitin")
-    print("free!")
-    print(task.get(timeout=1))
+        pass
     return response.json({"data" : task.get(timeout=1)})
 
 
 @app.listener('before_server_start')
 def before_start(app, loop):
-    logging.info("SERVER STARTING")
+    logger.debug("Staring app.")
 
 @app.listener('after_server_start')
 def after_start(app, loop):
-    logging.info("SERVER STARTED")
+    logger.debug("App started.")
 
 @app.listener('before_server_stop')
 def before_stop(app, loop):
-    logging.info("SERVER STOPPING")
+    logger.debug("Stopping app.")
 
 
 @app.listener('after_server_stop')
 def after_stop(app, loop):
-    logging.info("TRIED EVERYTHING")
+    logger.debug("App stopped.")
 
 # Catches 404 pages
 @app.exception(NotFound)
 def ignore_404s(request, exception):
-    return response.text("Yep, I totally found the page: {}".format(
+    return response.text("404: {}".format(
         request.url))
 
 
@@ -161,16 +146,14 @@ def ignore_ServiceUnavailable(request, exception):
 # catch timeouts
 @app.exception(RequestTimeout)
 def Timeout(request, exception):
+    logger.warnin("Hit a timeout error {}".format(request.url))
     return response.text("Request Timeout")
-    print(request.url, exception)
-    logging.info(request.url)
 
 
 @app.exception(ServerError)
 def log_any_exception(request, exception):
-    logging.error(request.url, exception)
-
+    logger.error(request.url, exception)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8181, debug=True, access_log=True, workers=1)
+    app.run(host="0.0.0.0", port=8181, debug=False, access_log=True, workers=1)
 
