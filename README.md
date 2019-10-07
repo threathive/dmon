@@ -113,6 +113,10 @@ Run timed background tasks (automated tasks)
 
  celery -A app.celery worker -l info 
 
+Run beat
+===
+ celery beat --app app.celery -l info
+
 
 Run API
 ===
