@@ -103,6 +103,23 @@ GET | POST  /disable/{domain}
 {'data': 'done!'}
 ```
 
+Run async tasks (on demand tasks)
+===
+ celery -A worker worker -l warning
+
+
+Run timed background tasks (automated tasks)
+===
+
+ celery -A app.celery worker -l info 
+
+
+Run API
+===
+
+ python3 app.py
+
+
 Author
 ======
 
@@ -127,18 +144,3 @@ If you would like to contribute, fork the project, make a patch and send a pull 
 
 
 
-Run async tasks (on demand tasks)
-===
- celery -A worker worker -l warning
-
-
-Run timed background tasks (automated tasks)
-===
-
- celery -A app.celery worker -l info 
-
-
-Run API
-===
-
- python3 app.py
