@@ -11,7 +11,7 @@ from sanic_openapi import doc
 import logging
 import logging.handlers
 
-from common.tasks import add_domain, get_domain, delete_domain, test, resolve_domains, disable_domain, enable_domain, get_ns, get_ipv4, get_ipv6
+from common.tasks import add_domain, get_domain, delete_domain, test, resolve_domains, disable_domain, enable_domain, get_ns, get_ipv4, get_ipv6, get_domains_by_status, get_domains_by_enabled_status
 from celery.result import AsyncResult
 
 app = Sanic(__name__)
@@ -28,7 +28,7 @@ app.config['CELERYBEAT_SCHEDULE'] = {
         # Executes every minute
         'periodic_task-every-minute': {
             'task': 'periodic_task',
-            'schedule': crontab(minute="*")
+            'schedule': crontab(minute="*/5")
         }
     }
 
@@ -55,7 +55,7 @@ def periodic_task():
 
 @app.route('/ip/<ip>', methods=['GET']) #by default we look for ipv4
 @app.route('/ipv4/<ip>', methods=['GET'])
-@doc.summary("index endpoint.. nothing to see here")
+@doc.summary("Lookup a ipv4 address.")
 async def fetch_ipv4(request, ip):
     task = get_ipv4.delay(ip)
     while not task.ready():
@@ -64,7 +64,7 @@ async def fetch_ipv4(request, ip):
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/ipv6/<ip>', methods=['GET'])
-@doc.summary("index endpoint.. nothing to see here")
+@doc.summary("Lookup a ipv6 address.")
 async def fetch_ipv6(request, ip):
     task = get_ipv6.delay(ip)
     while not task.ready():
@@ -72,15 +72,36 @@ async def fetch_ipv6(request, ip):
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/ns/<ns_domain>', methods=['GET'])
-@doc.summary("index endpoint.. nothing to see here")
+@doc.summary("Lookup an ns address.")
 async def fetch_ns(request, ns_domain):
     task = get_ns.delay(ns_domain)
     while not task.ready():
         pass
     return response.json({"data" : task.get(timeout=1)})
 
+@app.route('/status/domains', methods=['GET'])
+@app.route('/status/<status>/domains', methods=['GET'])
+@doc.summary("Get back a list of all domains filterable by dns status.")
+async def fetch_domain_status(request, status='all'):
+    task = get_domains_by_status.delay(status)
+    while not task.ready():  
+        pass
+
+    return response.json({"data" : task.get(timeout=1)})
+
+@app.route('/enabled/domains', methods=['GET'])
+@app.route('/enabled/<status>/domains', methods=['GET'])
+@doc.summary("Get back a list of all domains filterable by enabled status.")
+async def fetch_domain_enabled_status(request, status="all"):
+    task = get_domains_by_enabled_status.delay(status)
+    while not task.ready():
+        pass
+
+    return response.json({"data" : task.get(timeout=1)})
+
+
 @app.route('/domain/<domain>', methods=['GET'])
-@doc.summary("index endpoint.. nothing to see here")
+@doc.summary("Get all history for a specific domain.")
 async def fetch_domain(request, domain):
     task = get_domain.delay(domain)
     while not task.ready():
@@ -88,7 +109,7 @@ async def fetch_domain(request, domain):
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/domain/<domain>', methods=['DELETE'])
-@doc.summary("index endpoint.. nothing to see here")
+@doc.summary("Remove a domain completely.")
 async def drop_domain(request, domain):
     task = delete_domain.delay(domain)
     while not task.ready():
@@ -97,7 +118,7 @@ async def drop_domain(request, domain):
 
 
 @app.route('/enable/<domain>', methods=['GET', 'POST'])
-@doc.summary("index endpoint.. nothing to see here")
+@doc.summary("Enable a domain.")
 async def turn_on_domain(request, domain):
     task = enable_domain.delay(domain)
     while not task.ready():
@@ -105,13 +126,12 @@ async def turn_on_domain(request, domain):
     return response.json({"data" : task.get(timeout=1)})
 
 @app.route('/disable/<domain>', methods=['GET', 'POST'])
-@doc.summary("index endpoint.. nothing to see here")
+@doc.summary("Disable a domain.")
 async def turn_off_domain(request, domain):
     task = disable_domain.delay(domain)
     while not task.ready():
         pass
     return response.json({"data" : task.get(timeout=1)})
-
 
 @app.listener('before_server_start')
 def before_start(app, loop):

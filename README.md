@@ -71,6 +71,26 @@ GET /ns/{ns_domain}
            'last_seen': '2019-10-07T22:37:00.048881'}]}
 ```
 
+GET /all/domains
+GET /all/domains/{status}
+
+```
+{'data': [{'domain': '6ao.top', 'enabled': False},
+          {'domain': 'banken-net.top', 'enabled': False},
+          {'domain': 'bankieren.rabobank.nl.banking-eu.top', 'enabled': False},
+          {'domain': 'bankieren.rabobank.nl.banking-info.top',
+           'enabled': False},
+          {'domain': 'bankieren.rabobank.nl.banking-nl.top', 'enabled': False},
+          {'domain': 'bankieren.rabobank.nl.net-recycle.top', 'enabled': False},
+          {'domain': 'banking-eu.top', 'enabled': False},
+          {'domain': 'banking-info.top', 'enabled': False},
+          {'domain': 'banking-nl.top', 'enabled': False},
+          {'domain': 'cpanel.6ao.top', 'enabled': False},
+          {'domain': 'gouvqcnet.info', 'enabled': False},
+          {'domain': 'mail.taxcolaire.info', 'enabled': False},
+          {'domain': 'payu.zabawkitoys.eu', 'enabled': False},
+```
+
 GET /domain/{domain}
 
 ```
@@ -105,13 +125,17 @@ GET | POST  /disable/{domain}
 
 Run async tasks (on demand tasks)
 ===
- celery -A worker worker -l warning
+ celery -A worker worker -l info --autoscale=5,1 -O fair
 
 
 Run timed background tasks (automated tasks)
 ===
 
- celery -A app.celery worker -l info 
+ celery -A app.celery worker -l info --autoscale=5,1 -O fair
+
+Run beat
+===
+ celery beat --app app.celery -l info
 
 
 Run API

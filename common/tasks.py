@@ -41,12 +41,52 @@ app = Celery('tasks', broker='redis://127.0.0.1/12', backend='redis://127.0.0.1/
 
 @app.task
 def add_domain(domain):
-    mydict = { "domain" : domain, "enabled" : True }
+    mydict = { "domain" : domain, "enabled" : True, 'last_updated': datetime.datetime.utcnow().isoformat(), "status" : "active" }
     x = domains.insert_one(mydict)
-    return "ok"
+    return "done!"
+
 
 @app.task
-def get_domain(domain):
+def get_domains_by_status(status):
+    _hits = []
+    match = {"status" : status}
+    if status == 'all':
+        match = {}
+
+    for x in domains.find(match):
+        _hits.append({
+                  'domain': x.get('domain'),
+                  'enabled': x.get("enabled"),
+                  'first_seen': ObjectId(x.get('_id')).generation_time,
+                  'last_updated': x.get('last_updated'),
+                  'status': x.get('status')
+        })
+
+    return _hits
+
+@app.task
+def get_domains_by_enabled_status(status):
+    _hits = []
+    match = {}
+    if status == "enabled":
+        match = {"enabled" : True}
+    elif status == "disabled":
+        match = {"enabled": False}
+
+    for x in domains.find(match ):
+        _hits.append({
+                  'domain': x.get('domain'),
+                  'enabled': x.get("enabled"),
+                  'first_seen': ObjectId(x.get('_id')).generation_time,
+                  'last_updated': x.get('last_updated'),
+                  'status': x.get('status')
+        })
+
+    return _hits
+
+
+@app.task
+def get_domain(domain): 
     _hits = []
     for x in dns_history.find({ "domain": domain }):
         _hits.append({
@@ -109,7 +149,8 @@ def disable_domain(domain):
         x = domains.find_one_and_update(
             {'domain' : domain },
             {'$set': {
-                'enabled' : False
+                'enabled' : False,
+                'last_updated': datetime.datetime.utcnow().isoformat()
             }},
             upsert=True,
             return_document=ReturnDocument.AFTER
@@ -128,7 +169,8 @@ def enable_domain(domain):
         x = domains.find_one_and_update(
             {'domain' : domain },
             {'$set': {
-                'enabled' : True
+                'enabled' : True,
+                'last_updated': datetime.datetime.utcnow().isoformat()
             }},
             upsert=True,
             return_document=ReturnDocument.AFTER
@@ -161,7 +203,66 @@ def resolve_domains():
             try:
                 answer = dns.resolver.query(d.get("domain"), record)
                 for item in answer.rrset.items:
-                    _dns_session[record].append(item.to_text())
+                    _dns_session[record].append(item.to_text().strip("."))
+                    try:
+                        x = domains.find_one_and_update(
+                        {'domain' : d.get("domain") },
+                        {'$set': {
+                           'enabled' : True,
+                           'status': 'active',
+                           'last_updated': datetime.datetime.utcnow().isoformat()
+                        }},
+                         upsert=True,
+                         return_document=ReturnDocument.AFTER
+                        )
+
+                    except Exception as e:
+                        logger.error("Error updating domain status {} {}".format(d.get("domain"), e))
+
+            except dns.resolver.NXDOMAIN as nxdomain:
+                logger.warning("NXDOMAIN {} disabling ".format(d.get("domain")))
+
+                try:
+                    x = domains.find_one_and_update(
+                    {'domain' : d.get("domain") },
+                    {'$set': {
+                       'enabled' : False,
+                       'status': 'nxdomain',
+                       'last_updated': datetime.datetime.utcnow().isoformat()
+
+                    }},
+                     upsert=True,
+                     return_document=ReturnDocument.AFTER
+                    )
+
+                except Exception as e:
+                    logger.error("Error updating domain status {} {}".format(d.get("domain"), e))
+
+                break
+
+            except dns.resolver.NoAnswer as no_answer:
+                logger.warning("NO ANSWER {}".format(no_answer))
+
+            except dns.resolver.NoNameservers as no_ns:
+                logger.warning("NO NAMESERVERS {}".format(no_ns))
+                try:
+                    x = domains.find_one_and_update(
+                    {'domain' : d.get("domain") },
+                    {'$set': {
+                       'enabled' : False,
+                       'status': 'no_nameservers',
+                       'last_updated': datetime.datetime.utcnow().isoformat()
+
+                    }},
+                     upsert=True,
+                     return_document=ReturnDocument.AFTER
+                    )
+
+                except Exception as e:
+                    logger.error("Error updating domain status {} {}".format(d.get("domain"), e))
+
+                break
+
             except Exception as e:
                 logger.warning("ran into an error {} for record type {} when working on domain {}".format(e, record, d.get("domain")))
 
