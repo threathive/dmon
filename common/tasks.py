@@ -15,6 +15,11 @@ from bson import json_util, ObjectId
 import json
 
 from celery.utils.log import get_task_logger
+
+from urllib.parse import urlparse
+import tldextract
+import pythonwhois
+
 import logging
 import logging.handlers
 logger = get_task_logger(__name__)
@@ -33,9 +38,9 @@ myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient["mydatabase"]
 dns_history = mydb["dns_history"]
 domains = mydb["domains"]
+domain_whois = mydb["domain_whois"]
 
 #print(myclient.drop_database('mydatabase'))
-
 
 app = Celery('tasks', broker='redis://127.0.0.1/12', backend='redis://127.0.0.1/13')
 
@@ -94,6 +99,23 @@ def get_domain(domain):
                   'first_seen': ObjectId(x.get('_id')).generation_time,
                   'last_seen': x.get('last_seen'),
                   'dns_session' : x.get('_dns_session')
+        })
+
+    return _hits
+
+@app.task
+def get_domain_whois(domain): 
+    _hits = []
+    _extracted = tldextract.extract(domain)
+    _domain = _extracted.domain
+    _suffix = _extracted.suffix
+    _tld = ".".join([_domain, _suffix])
+
+    for x in domain_whois.find({ "tld" : _tld }):
+        _hits.append({
+                  'tld': x.get('tld'),
+                  'recorded': ObjectId(x.get('_id')).generation_time,
+                  'whois' : x.get('whois')
         })
 
     return _hits
@@ -185,6 +207,7 @@ def enable_domain(domain):
 @app.task
 def test():
     return "test works!"
+
 
 @app.task
 def resolve_domains():
@@ -282,3 +305,27 @@ def resolve_domains():
             )
         except Exception as e:
             logger.error(e)
+
+
+@app.task
+def get_whois():
+    for d in domains.find( {"enabled" : True} ):
+        _extracted = tldextract.extract(d.get("domain"))
+        _domain = _extracted.domain
+        _suffix = _extracted.suffix
+        _tld = ".".join([_domain, _suffix])
+
+        _d = domain_whois.find_one({ "tld": _tld })
+        if _d:
+            return
+
+        try:
+            _whois = pythonwhois.get_whois(_tld)
+
+            mydict = { "tld": _tld, "whois": _whois, "recorded" : datetime.datetime.utcnow().isoformat()}
+            x = domain_whois.insert_one(mydict)
+            return
+
+        except Exception as e:
+            logger.error("Unable to retrieve Whois data for {}, instead we hit an error {}".format(domain, e))
+
