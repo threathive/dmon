@@ -11,7 +11,7 @@ from sanic_openapi import doc
 import logging
 import logging.handlers
 
-from common.tasks import add_domain, get_domain, delete_domain, test, resolve_domains, disable_domain, enable_domain, get_ns, get_ipv4, get_ipv6, get_domains_by_status, get_domains_by_enabled_status
+from common.tasks import add_domain, get_domain, delete_domain, test, resolve_domains, disable_domain, enable_domain, get_ns, get_ipv4, get_ipv6, get_domains_by_status, get_domains_by_enabled_status, get_whois, get_domain_whois
 from celery.result import AsyncResult
 
 app = Sanic(__name__)
@@ -29,6 +29,10 @@ app.config['CELERYBEAT_SCHEDULE'] = {
         'periodic_task-every-minute': {
             'task': 'periodic_task',
             'schedule': crontab(minute="*/5")
+        },
+        'collect_whois': {
+            'task': 'collect_whois',
+            'schedule': crontab(minute="*/15")
         }
     }
 
@@ -36,7 +40,7 @@ celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
 
 app.blueprint(swagger_blueprint)
-app.config.API_VERSION = '0.0.1'
+app.config.API_VERSION = '0.0.2'
 app.config.API_TITLE = 'DMON API'
 app.config.API_DESCRIPTION = 'DMON API'
 app.config.API_TERMS_OF_SERVICE = 'Give me koffie..'
@@ -52,6 +56,10 @@ async def index(request):
 @celery.task(name ="periodic_task")
 def periodic_task():
     resolve_domains.delay()
+
+@celery.task(name ="collect_whois")
+def collect_whois():
+    get_whois.delay()
 
 @app.route('/ip/<ip>', methods=['GET']) #by default we look for ipv4
 @app.route('/ipv4/<ip>', methods=['GET'])
@@ -104,6 +112,14 @@ async def fetch_domain_enabled_status(request, status="all"):
 @doc.summary("Get all history for a specific domain.")
 async def fetch_domain(request, domain):
     task = get_domain.delay(domain)
+    while not task.ready():
+        pass
+    return response.json({"data" : task.get(timeout=1)})
+
+@app.route('/whois/domain/<domain>', methods=['GET'])
+@doc.summary("Get whois for a  specific domain.")
+async def fetch_domain_whois(request, domain):
+    task = get_domain_whois.delay(domain)
     while not task.ready():
         pass
     return response.json({"data" : task.get(timeout=1)})

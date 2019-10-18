@@ -1,3 +1,6 @@
+ipwhois==1.1.0
+tldextract==2.2.1
+pythonwhois==2.4.3
 aiofiles==0.4.0
 amqp==2.5.1
 celery==4.3.0
