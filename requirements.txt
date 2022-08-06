@@ -10,6 +10,6 @@ pymongo==3.9.0
 pytz==2019.2
 redis==3.3.8
 requests>=2.20.0
-sanic==20.12.6
+sanic==20.12.7
 sanic-openapi==0.6.0
 uvloop==0.13.0
